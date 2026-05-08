@@ -4,14 +4,16 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import flwr as fl
+import numpy as np
+import os
 
 from model import SimpleCNN
 
 def load_data(hospital_id):
-    path = f'data/hospital_{hostpial_id}.pt'
+    path = f'data/hospital_{hospital_id}.pt'
     if not os.path.exists(path):
-        raise FileNotFoundError(f"Data for Hospital {hospital_id] not found. Run data_setup.py first!")
-    dataset = torch.load(path)
+        raise FileNotFoundError(f"Data for Hospital {hospital_id} not found. Run data_setup.py first!")
+    dataset = torch.load(path, weights_only=False)
     return DataLoader(dataset, batch_size=32, shuffle=True)
 
 
@@ -29,13 +31,13 @@ def train(mode, trainloader, epochs):
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
-        print(f"Epoch {epoch+1}: Loss {running_loss/len(trainloader:.4f}")
+        print(f"Epoch {epoch+1}: Loss {running_loss/len(trainloader):.4f}")
 
 
 class HospitalClient(fl.client.NumPyClient):
     def __init__(self, model, trainloader):
         self.model = model
-        sefl.trainloader = trainloader
+        self.trainloader = trainloader
 
         def get_parameters(self, config):
             return [val.cpu().numpy() for _, val in self.model.state.dict().items()]
@@ -48,7 +50,7 @@ class HospitalClient(fl.client.NumPyClient):
         def fit(self, parameters, config):
             self.set_paramters(parameters)
             train(self.model, self.trainloader, epochs=1)
-            return self.get_parameters(config={}), (len(self.trainloader.dataset), {}
+            return self.get_parameters(config={}), len(self.trainloader.dataset), {}
 
         def evaluate(self, parameters, config):
             self.set_parameters(parameters)
@@ -79,8 +81,8 @@ if __name__ == "__main__":
     model = SimpleCNN()
     train_loader = load_data(hospital_id)
 
-    print(f"Hospital {hosptial_id} is online and training...")
+    print(f"Hospital {hospital_id} is online and training...")
     fl.client.start_numpy_client(
-        server_address="127.0.0.1:8080"
+        server_address="127.0.0.1:8080",
         client=HospitalClient(model, train_loader)
     )
